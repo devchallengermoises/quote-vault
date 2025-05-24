@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [ ! -z "$WWWUSER" ]; then
+    usermod -u $WWWUSER sail
+fi
+
+# Ensure we have the correct permissions
+chown -R sail:sail /var/www/html
+
+# Start supervisor
+/usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf 

@@ -1,0 +1,126 @@
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP}'
+        image: 'quotevault/app'
+        container_name: 'quotevault-app'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '80:80'
+            - '5173:5173'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            APP_ENV: '${APP_ENV}'
+            APP_DEBUG: '${APP_DEBUG}'
+            DB_CONNECTION: '${DB_CONNECTION}'
+            DB_HOST: '${DB_HOST}'
+            DB_PORT: '${DB_PORT}'
+            DB_DATABASE: '${DB_DATABASE}'
+            DB_USERNAME: '${DB_USERNAME}'
+            DB_PASSWORD: '${DB_PASSWORD}'
+            REDIS_HOST: '${REDIS_HOST}'
+            REDIS_PASSWORD: '${REDIS_PASSWORD}'
+            REDIS_PORT: '${REDIS_PORT}'
+            MAIL_MAILER: '${MAIL_MAILER}'
+            MAIL_HOST: '${MAIL_HOST}'
+            MAIL_PORT: '${MAIL_PORT}'
+            MAIL_USERNAME: '${MAIL_USERNAME}'
+            MAIL_PASSWORD: '${MAIL_PASSWORD}'
+            MAIL_ENCRYPTION: '${MAIL_ENCRYPTION}'
+            MAIL_FROM_ADDRESS: '${MAIL_FROM_ADDRESS}'
+            MAIL_FROM_NAME: '${MAIL_FROM_NAME}'
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - quotevault
+        depends_on:
+            - db
+            - cache
+            - mail
+        healthcheck:
+            test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+        command: >
+            bash -c "
+                if [ ! -f .env ]; then
+                    cp .env.example .env
+                fi &&
+                composer install --no-dev --optimize-autoloader &&
+                npm install &&
+                npm run build &&
+                php artisan key:generate &&
+                php artisan migrate --force &&
+                php artisan storage:link &&
+                php artisan config:cache &&
+                php artisan route:cache &&
+                php artisan view:cache &&
+                php artisan serve --host=0.0.0.0 --port=80
+            "
+    db:
+        image: 'mysql/mysql-server:8.0'
+        container_name: 'quotevault-db'
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 1
+        volumes:
+            - 'quotevault-mysql:/var/lib/mysql'
+        networks:
+            - quotevault
+        healthcheck:
+            test:
+                - CMD
+                - mysqladmin
+                - ping
+                - '-p${DB_PASSWORD}'
+            retries: 3
+            timeout: 5s
+    cache:
+        image: 'redis:alpine'
+        container_name: 'quotevault-cache'
+        ports:
+            - '${FORWARD_REDIS_PORT:-6379}:6379'
+        volumes:
+            - 'quotevault-redis:/data'
+        networks:
+            - quotevault
+        healthcheck:
+            test:
+                - CMD
+                - redis-cli
+                - ping
+            retries: 3
+            timeout: 5s
+    mail:
+        image: 'axllent/mailpit:latest'
+        container_name: 'quotevault-mail'
+        ports:
+            - '${FORWARD_MAILPIT_PORT:-1025}:1025'
+            - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
+        networks:
+            - quotevault
+
+networks:
+    quotevault:
+        driver: bridge
+        name: quotevault-network
+
+volumes:
+    quotevault-mysql:
+        driver: local
+        name: quotevault-mysql-data
+    quotevault-redis:
+        driver: local
+        name: quotevault-redis-data
