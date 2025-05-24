@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Http\JsonResponse;
 
 /**
  * Controller for managing quotes and favorites
@@ -37,40 +38,27 @@ class QuoteController extends Controller
         try {
             Log::info('Starting to fetch quotes from API');
             
-            // Fetch quotes from the API
-            $quotes = $this->quoteService->getRandomQuotes(12);
+            $quotes = $this->quoteService->getRandomQuotes(50);
             Log::info('Quotes received from API:', ['quotes' => $quotes]);
 
-            if (empty($quotes)) {
+            if ($quotes->isEmpty()) {
                 Log::warning('No quotes received from API');
                 throw new \RuntimeException('No quotes received from API');
             }
-
-            // Transform the quotes to the format expected by the view
-            $transformedQuotes = collect($quotes)->map(function ($quote) {
-                return [
-                    'quote' => [
-                        'id' => $quote['quote']['id'],
-                        'body' => $quote['quote']['body'],
-                        'author' => $quote['quote']['author'],
-                    ]
-                ];
-            })->toArray();
-            Log::info('Transformed quotes:', ['transformed' => $transformedQuotes]);
 
             // Create a manual paginator
             $page = request()->get('page', 1);
             $perPage = 12;
             $paginator = new LengthAwarePaginator(
-                $transformedQuotes,
-                count($transformedQuotes),
+                $quotes->forPage($page, $perPage),
+                $quotes->count(),
                 $perPage,
                 $page,
                 ['path' => request()->url()]
             );
 
             return view('quotes.index', [
-                'quotes' => $transformedQuotes,
+                'quotes' => $quotes->forPage($page, $perPage),
                 'paginator' => $paginator,
             ]);
         } catch (\Exception $e) {
@@ -79,13 +67,13 @@ class QuoteController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             return view('quotes.index', [
-                'quotes' => [[
-                    'quote' => [
-                        'id' => 'error',
-                        'body' => 'An error occurred while fetching quotes. Please try again later.',
-                        'author' => 'System'
-                    ]
-                ]],
+                'quotes' => collect([[
+                    'id' => 'error',
+                    'body' => 'An error occurred while fetching quotes. Please try again later.',
+                    'author' => 'System',
+                    'is_favorite' => false,
+                    'is_long' => false
+                ]]),
                 'paginator' => null,
             ]);
         }
@@ -106,39 +94,64 @@ class QuoteController extends Controller
      * Toggle the favorite status of a quote
      * 
      * @param string $externalId The external ID of the quote to toggle
-     * @return RedirectResponse
+     * @return RedirectResponse|JsonResponse
      */
-    public function toggleFavorite(string $externalId): RedirectResponse
+    public function toggleFavorite(string $externalId): RedirectResponse|JsonResponse
     {
         try {
             $user = auth()->user();
             
             if (!$externalId) {
                 Log::warning('Attempted to toggle favorite with empty external ID');
-                return back()->with('error', 'Invalid quote ID');
+                return request()->wantsJson() 
+                    ? response()->json(['error' => 'Invalid quote ID'], 400)
+                    : back()->with('error', 'Invalid quote ID');
             }
 
+            // Buscar la cita en la base de datos o crearla si no existe
             $quote = Quote::where('external_id', $externalId)->first();
             
             if (!$quote) {
-                $quoteData = $this->quoteService->getRandomQuote();
+                // Obtener los datos de la cita del servicio
+                $quoteData = $this->quoteService->getRandomQuotes(1)->first();
                 if (!$quoteData) {
                     Log::error('Failed to fetch quote data for external ID: ' . $externalId);
-                    return back()->with('error', 'Failed to fetch quote data');
+                    return request()->wantsJson()
+                        ? response()->json(['error' => 'Failed to fetch quote data'], 500)
+                        : back()->with('error', 'Failed to fetch quote data');
                 }
-                $quote = $this->quoteService->getQuoteRepository()->save($quoteData);
+
+                // Crear la cita en la base de datos
+                $quote = Quote::create([
+                    'external_id' => $externalId,
+                    'body' => $quoteData['body'],
+                    'author' => $quoteData['author']
+                ]);
             }
             
-            if ($user->favoriteQuotes()->where('quotes.id', $quote->id)->exists()) {
+            // Verificar si la cita ya está en favoritos
+            $isFavorite = $user->favoriteQuotes()->where('quotes.id', $quote->id)->exists();
+            
+            if ($isFavorite) {
                 $user->favoriteQuotes()->detach($quote->id);
                 $message = 'Quote removed from favorites!';
+                $isFavorite = false;
             } else {
                 $user->favoriteQuotes()->attach($quote->id);
                 $message = 'Quote added to favorites!';
+                $isFavorite = true;
             }
 
-            // Clear the favorites cache for this user
+            // Limpiar los caches relevantes
+            $this->quoteService->clearFavoriteCache($externalId);
             Cache::forget('user_favorites_' . $user->id);
+
+            if (request()->wantsJson()) {
+                return response()->json([
+                    'message' => $message,
+                    'isFavorite' => $isFavorite
+                ]);
+            }
 
             return back()->with('success', $message);
         } catch (\Exception $e) {
@@ -147,7 +160,10 @@ class QuoteController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'externalId' => $externalId
             ]);
-            return back()->with('error', 'An error occurred while updating favorites. Please try again later.');
+            
+            return request()->wantsJson()
+                ? response()->json(['error' => 'An error occurred while updating favorites'], 500)
+                : back()->with('error', 'An error occurred while updating favorites. Please try again later.');
         }
     }
 } 

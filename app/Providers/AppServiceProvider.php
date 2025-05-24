@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\ApiClients\FavQsClient;
+use App\ApiClients\ZenQuotesClient;
 use App\Repositories\QuoteRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,7 +13,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(FavQsClient::class);
+        $this->app->singleton(ZenQuotesClient::class);
         $this->app->singleton(QuoteRepository::class);
     }
 

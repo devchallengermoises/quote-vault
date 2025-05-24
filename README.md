@@ -17,29 +17,121 @@ A Laravel application for managing and sharing inspirational quotes.
 - Docker
 - Docker Compose
 - Git
+- PHP 8.2 or higher
+- Node.js 18 or higher
+- Composer
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/level-connections.git
-cd level-connections
+git clone https://github.com/yourusername/quote-vault.git
+cd quote-vault
 ```
 
-2. Start the application:
+2. Create and configure your environment file:
 ```bash
+cp .env.example .env
+```
+
+3. Configure your environment variables in `.env`:
+```env
+APP_NAME=QuoteVault
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost
+
+DB_CONNECTION=mysql
+DB_HOST=db
+DB_PORT=3306
+DB_DATABASE=quotevault
+DB_USERNAME=quotevault
+DB_PASSWORD=your_secure_password
+
+REDIS_HOST=cache
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=smtp
+MAIL_HOST=mail
+MAIL_PORT=1025
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_ENCRYPTION=null
+MAIL_FROM_ADDRESS=hello@quotevault.com
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+4. Start the application:
+```bash
+# Start Docker containers
 docker compose up -d
 ```
 
-This command will:
-- Build and start Docker containers
+The application will automatically:
 - Install PHP dependencies
 - Install Node.js dependencies
+- Generate application key
 - Run database migrations
-- Start the development server
-- Configure additional services (MySQL, Redis, Mailpit, Selenium)
+- Create storage link
+- Build frontend assets
+- Optimize application performance with caching
 
-The application will be available at http://localhost:8000
+The application will be available at http://localhost:8080
+
+## Configuration
+
+### Environment Variables
+
+The following environment variables can be configured in your `.env` file:
+
+#### Application
+- `APP_NAME`: The name of your application
+- `APP_ENV`: The environment (local, production, etc.)
+- `APP_DEBUG`: Enable/disable debug mode
+- `APP_URL`: The base URL of your application
+
+#### Database
+- `DB_CONNECTION`: Database driver (mysql)
+- `DB_HOST`: Database host (db)
+- `DB_PORT`: Database port (3306)
+- `DB_DATABASE`: Database name
+- `DB_USERNAME`: Database username
+- `DB_PASSWORD`: Database password
+
+#### Redis
+- `REDIS_HOST`: Redis host (cache)
+- `REDIS_PASSWORD`: Redis password
+- `REDIS_PORT`: Redis port (6379)
+
+#### Mail
+- `MAIL_MAILER`: Mail driver (smtp)
+- `MAIL_HOST`: Mail host (mail)
+- `MAIL_PORT`: Mail port (1025)
+- `MAIL_USERNAME`: Mail username
+- `MAIL_PASSWORD`: Mail password
+- `MAIL_ENCRYPTION`: Mail encryption
+- `MAIL_FROM_ADDRESS`: Default from address
+- `MAIL_FROM_NAME`: Default from name
+
+### Docker Services
+
+The application uses the following Docker services:
+
+- **app**: Laravel application server
+- **db**: MySQL 8.0 database
+- **cache**: Redis for caching and sessions
+- **mail**: Mailpit for email testing
+
+### Ports
+
+Default ports used by the services:
+- Web server: 8080
+- Vite development server: 5173
+- MySQL: 3306
+- Redis: 6379
+- Mailpit SMTP: 1025
+- Mailpit Web UI: 8025
 
 ## Development
 
@@ -47,27 +139,55 @@ The application will be available at http://localhost:8000
 
 #### Run Tests
 ```bash
-docker compose exec laravel.test php artisan test
+docker compose exec app php artisan test
 ```
 
 #### Run Tests with Coverage
 ```bash
-docker compose exec laravel.test php artisan test --coverage
+docker compose exec app php artisan test --coverage
 ```
 
 #### Clear Quote Cache
 ```bash
-docker compose exec laravel.test php artisan quotes:clear-cache
+docker compose exec app php artisan quotes:clear-cache
 ```
 
 #### Access Laravel Console
 ```bash
-docker compose exec laravel.test php artisan tinker
+docker compose exec app php artisan tinker
 ```
 
 #### View Logs
 ```bash
-docker compose logs -f laravel.test
+docker compose logs -f app
+```
+
+#### Access MySQL Console
+```bash
+docker compose exec db mysql -u${DB_USERNAME} -p${DB_PASSWORD} ${DB_DATABASE}
+```
+
+#### Access Redis CLI
+```bash
+docker compose exec cache redis-cli
+```
+
+#### View Mailpit Dashboard
+Open http://localhost:8025 in your browser
+
+#### Stop All Containers
+```bash
+docker compose down
+```
+
+#### Rebuild Containers
+```bash
+docker compose up -d --build
+```
+
+#### View Container Status
+```bash
+docker compose ps
 ```
 
 ### Project Structure

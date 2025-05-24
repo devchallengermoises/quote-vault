@@ -15,36 +15,18 @@ class QuoteCard extends Component
     public function mount(Quote $quote)
     {
         $this->quote = $quote;
-        $this->isFavorite = Cache::remember(
-            'quote_favorite_' . auth()->id() . '_' . $quote->id,
-            300,
-            fn() => auth()->user()->favoriteQuotes()->where('quotes.id', $quote->id)->exists()
-        );
+        $this->isFavorite = $quote->isFavoritedBy(auth()->user());
     }
 
     public function toggleFavorite()
     {
         $this->showAnimation = true;
-
-        if ($this->isFavorite) {
-            auth()->user()->favoriteQuotes()->detach($this->quote->id);
-            $this->isFavorite = false;
-            $this->dispatch('notify', [
-                'type' => 'success',
-                'message' => 'Quote removed from favorites!'
-            ]);
-        } else {
-            auth()->user()->favoriteQuotes()->attach($this->quote->id);
-            $this->isFavorite = true;
-            $this->dispatch('notify', [
-                'type' => 'success',
-                'message' => 'Quote added to favorites!'
-            ]);
-        }
-
-        // Clear relevant caches
-        Cache::forget('quote_favorite_' . auth()->id() . '_' . $this->quote->id);
-        Cache::forget('user_favorites_' . auth()->id());
+        $this->isFavorite = $this->quote->toggleFavorite(auth()->user());
+        
+        $this->dispatch('notify', [
+            'type' => 'success',
+            'message' => $this->isFavorite ? 'Quote added to favorites!' : 'Quote removed from favorites!'
+        ]);
 
         $this->dispatch('resetAnimation');
     }

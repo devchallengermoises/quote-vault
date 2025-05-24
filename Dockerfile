@@ -47,6 +47,7 @@ RUN apt-get update && apt-get upgrade -y \
         php8.2-memcached \
         php8.2-pcov \
         php8.2-xdebug \
+        default-mysql-client \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
     && curl -sL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y nodejs \
@@ -67,6 +68,10 @@ COPY php.ini /etc/php/8.2/cli/conf.d/99-sail.ini
 
 RUN chmod +x /usr/local/bin/start-container
 
+# Create installation script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 80
 
-ENTRYPOINT ["start-container"] 
+ENTRYPOINT ["docker-entrypoint.sh"] 

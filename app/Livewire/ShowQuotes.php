@@ -2,98 +2,114 @@
 
 namespace App\Livewire;
 
-use Livewire\Component;
-use App\Models\Quote;
-use Livewire\WithPagination;
 use App\Services\QuoteService;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Log;
+use Livewire\Component;
+use Livewire\WithPagination;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Cache;
 
 class ShowQuotes extends Component
 {
     use WithPagination;
 
-    protected $quoteService;
+    protected $listeners = ['quoteFavorited' => '$refresh', 'toggleFavorite'];
+    protected $paginationTheme = 'tailwind';
+    public $quotes = [];
+    public $perPage = 12;
+    public $page = 1;
 
-    public function boot(QuoteService $quoteService)
+    public function mount()
     {
-        $this->quoteService = $quoteService;
+        $this->page = request()->get('page', 1);
+        $this->perPage = 12;
+        $this->loadQuotes();
     }
 
-    public function render()
+    public function updatingPage($page)
     {
-        Log::info('Livewire ShowQuotes: Starting to fetch quotes from API');
+        $this->page = $page;
+        $this->loadQuotes();
+    }
 
+    public function toggleFavorite($quoteId)
+    {
         try {
-            // Fetch quotes from the API using the injected service
-            $quotesData = $this->quoteService->getRandomQuotes(12);
-            Log::info('Livewire ShowQuotes: Quotes received from API data:', ['data' => $quotesData]);
-
-            if ($quotesData->isEmpty()) {
-                 Log::warning('Livewire ShowQuotes: No quotes received from API');
-                 // Optionally return a view with a message indicating no quotes
-                 // return view('livewire.show-quotes', ['quotes' => collect(), 'paginator' => null]);
-                 // For now, we'll proceed with an empty collection, the view should handle it
-            }
-
-            // Transform the quotes to the format expected by the view
-            // The getRandomQuotes now returns a collection of transformed quotes, 
-            // so we just need to ensure the structure is correct if needed.
-            // Assuming getRandomQuotes returns a Collection where each item 
-            // has the structure ['quote' => ['id' => ..., 'body' => ..., 'author' => ...]]
-            $transformedQuotes = $quotesData->map(function ($item) {
-                 // Adjust this mapping based on the actual structure returned by getRandomQuotes
-                 // If getRandomQuotes already returns the desired structure, this map might be simplified or removed
-                 return [
-                     'quote' => [
-                         'id' => $item['quote']['id'] ?? null,
-                         'body' => $item['quote']['body'] ?? 'Quote body missing',
-                         'author' => $item['quote']['author'] ?? 'Unknown Author',
-                     ]
-                 ];
-            });
-
-            Log::info('Livewire ShowQuotes: Transformed quotes for view:', ['transformed' => $transformedQuotes]);
-
-            // Create a manual paginator for the API results
-            $page = LengthAwarePaginator::resolveCurrentPage();
-            $perPage = 12;
-            $paginator = new LengthAwarePaginator(
-                $transformedQuotes->forPage($page, $perPage),
-                $transformedQuotes->count(),
-                $perPage,
-                $page,
-                ['path' => LengthAwarePaginator::resolveCurrentPath()]
-            );
-
-            Log::info('Livewire ShowQuotes: Paginator created');
-
-            return view('livewire.show-quotes', [
-                'quotes' => $paginator->items(), // Pass items for current page
-                'paginator' => $paginator,
-            ]);
+            $quoteService = app(\App\Services\QuoteService::class);
+            $added = $quoteService->toggleFavorite($quoteId);
+            $this->loadQuotes();
+            $this->dispatch('quoteFavorited');
+            $this->dispatch('favorite-toggled', added: $added);
         } catch (\Exception $e) {
-            Log::error('Livewire ShowQuotes: Error fetching quotes: ' . $e->getMessage(), [
-                'exception' => $e,
+            \Log::error('Error toggling favorite', [
+                'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
-             return view('livewire.show-quotes', [
-                'quotes' => collect([[
-                    'quote' => [
-                        'id' => 'error',
-                        'body' => 'An error occurred while fetching quotes. Please try again later.',
-                        'author' => 'System'
-                    ]
-                ]]),
-                'paginator' => null,
             ]);
         }
     }
 
-    // Reset pagination when any property changes that should trigger a re-fetch
-    // public function updated($propertyName)
-    // {
-    //     $this->resetPage();
-    // }
+    public function loadQuotes()
+    {
+        try {
+            $quoteService = app(QuoteService::class);
+            
+            // Use cache key based on page and perPage
+            $cacheKey = "quotes_page_{$this->page}_{$this->perPage}";
+            
+            // Try to get from cache first
+            $cachedQuotes = Cache::get($cacheKey);
+            if ($cachedQuotes) {
+                $this->quotes = collect($cachedQuotes);
+                return;
+            }
+            
+            // If not in cache, get from service
+            $allQuotes = $quoteService->getRandomQuotes(50);
+            
+            // Calculate offset for current page
+            $offset = ($this->page - 1) * $this->perPage;
+            
+            // Get only quotes for current page
+            $this->quotes = $allQuotes->slice($offset, $this->perPage);
+            
+            // Cache the results for 5 minutes
+            Cache::put($cacheKey, $this->quotes->toArray(), 300);
+            
+            \Log::info('Quotes loaded successfully', [
+                'total_quotes' => $allQuotes->count(),
+                'quotes_on_page' => $this->quotes->count(),
+                'current_page' => $this->page,
+                'per_page' => $this->perPage
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading quotes', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->quotes = collect([]);
+        }
+    }
+
+    public function render()
+    {
+        $quoteService = app(QuoteService::class);
+        
+        // Get total count from Redis or cache
+        $totalCount = Cache::remember('total_quotes_count', 300, function () use ($quoteService) {
+            return $quoteService->getRandomQuotes(50)->count();
+        });
+        
+        $paginator = new LengthAwarePaginator(
+            $this->quotes,
+            $totalCount,
+            $this->perPage,
+            $this->page,
+            ['path' => request()->url()]
+        );
+
+        return view('livewire.show-quotes', [
+            'quotes' => $this->quotes,
+            'paginator' => $paginator
+        ]);
+    }
 }
