@@ -8,7 +8,6 @@ use Illuminate\View\View;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -35,58 +34,16 @@ class QuoteController extends Controller
      */
     public function index(): View
     {
-        try {
-            Log::info('Starting to fetch quotes from API');
-            
-            $quotes = $this->quoteService->getRandomQuotes(50);
-            Log::info('Quotes received from API:', ['quotes' => $quotes]);
-
-            if ($quotes->isEmpty()) {
-                Log::warning('No quotes received from API');
-                throw new \RuntimeException('No quotes received from API');
-            }
-
-            // Create a manual paginator
-            $page = request()->get('page', 1);
-            $perPage = 12;
-            $paginator = new LengthAwarePaginator(
-                $quotes->forPage($page, $perPage),
-                $quotes->count(),
-                $perPage,
-                $page,
-                ['path' => request()->url()]
-            );
-
-            return view('quotes.index', [
-                'quotes' => $quotes->forPage($page, $perPage),
-                'paginator' => $paginator,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Error in QuoteController@index: ' . $e->getMessage(), [
-                'exception' => $e,
-                'trace' => $e->getTraceAsString()
-            ]);
-            return view('quotes.index', [
-                'quotes' => collect([[
-                    'id' => 'error',
-                    'body' => 'An error occurred while fetching quotes. Please try again later.',
-                    'author' => 'System',
-                    'is_favorite' => false,
-                    'is_long' => false
-                ]]),
-                'paginator' => null,
-            ]);
-        }
+        return view('quotes.index');
     }
 
     /**
      * Display the user's favorite quotes
      * 
-     * @return View|RedirectResponse
+     * @return View
      */
-    public function favorites(): View|RedirectResponse
+    public function favorites(): View
     {
-        // We will now handle fetching and pagination in the Livewire component
         return view('quotes.favorites');
     }
 

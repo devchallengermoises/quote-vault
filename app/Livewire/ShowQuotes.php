@@ -35,11 +35,11 @@ class ShowQuotes extends Component
     public function toggleFavorite($quoteId)
     {
         try {
-            $quoteService = app(\App\Services\QuoteService::class);
+            $quoteService = app(QuoteService::class);
             $added = $quoteService->toggleFavorite($quoteId);
             $this->loadQuotes();
             $this->dispatch('quoteFavorited');
-            $this->dispatch('favorite-toggled', added: $added);
+            $this->dispatch('favorite-toggled', quoteId: $quoteId, added: $added);
         } catch (\Exception $e) {
             \Log::error('Error toggling favorite', [
                 'error' => $e->getMessage(),

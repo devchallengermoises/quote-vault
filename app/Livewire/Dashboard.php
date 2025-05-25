@@ -7,7 +7,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Support\Facades\Cache;
 
-class Favorites extends Component
+class Dashboard extends Component
 {
     use WithPagination;
 
@@ -43,11 +43,6 @@ class Favorites extends Component
             }
             return $quote;
         })->toArray();
-
-        // If removing from favorites and we're on the favorites page, refresh
-        if (!$added) {
-            $this->loadQuotes();
-        }
     }
 
     public function toggleFavorite($quoteId)
@@ -91,7 +86,7 @@ class Favorites extends Component
             $userId = auth()->id();
             
             // Use cache key based on user, page and perPage
-            $cacheKey = "favorites_user_{$userId}_page_{$this->page}_{$this->perPage}";
+            $cacheKey = "quotes_all_user_{$userId}_page_{$this->page}_{$this->perPage}";
             
             // Try to get from cache first
             $cachedQuotes = Cache::get($cacheKey);
@@ -101,7 +96,7 @@ class Favorites extends Component
             }
             
             // If not in cache, get from service
-            $allQuotes = $quoteService->getFavoriteQuotes();
+            $allQuotes = $quoteService->getRandomQuotes(50);
             
             // Calculate offset for current page
             $offset = ($this->page - 1) * $this->perPage;
@@ -112,14 +107,14 @@ class Favorites extends Component
             // Cache the results for 5 minutes
             Cache::put($cacheKey, $this->quotes->toArray(), 300);
             
-            \Log::info('Favorites loaded successfully', [
-                'total_favorites' => $allQuotes->count(),
-                'favorites_on_page' => $this->quotes->count(),
+            \Log::info('Quotes loaded successfully', [
+                'total_quotes' => $allQuotes->count(),
+                'quotes_on_page' => $this->quotes->count(),
                 'current_page' => $this->page,
                 'per_page' => $this->perPage
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error loading favorites', [
+            \Log::error('Error loading quotes', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -133,8 +128,8 @@ class Favorites extends Component
         
         // Get total count from Redis or cache
         $userId = auth()->id();
-        $totalCount = Cache::remember("favorites_count_user_{$userId}", 300, function () use ($quoteService) {
-            return $quoteService->getFavoriteQuotes()->count();
+        $totalCount = Cache::remember("quotes_count_all_user_{$userId}", 300, function () use ($quoteService) {
+            return $quoteService->getRandomQuotes(50)->count();
         });
         
         $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
@@ -145,7 +140,7 @@ class Favorites extends Component
             ['path' => request()->url()]
         );
 
-        return view('livewire.favorites', [
+        return view('livewire.dashboard', [
             'quotes' => $this->quotes,
             'paginator' => $paginator
         ]);
