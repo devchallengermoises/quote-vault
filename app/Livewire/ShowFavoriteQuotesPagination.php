@@ -13,7 +13,7 @@ class ShowFavoriteQuotesPagination extends Component
     public function render()
     {
         $user = Auth::user();
-        $favorites = $user ? $user->favoriteQuotes()->paginate(6) : collect();
+        $favorites = $user ? $user->favoriteQuotes()->paginate(12) : collect();
         
         return view('livewire.show-favorite-quotes-pagination', [
             'paginator' => $favorites,

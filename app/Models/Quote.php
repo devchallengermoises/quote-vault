@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Cache;
 
 class Quote extends Model
 {
@@ -45,41 +44,14 @@ class Quote extends Model
     }
 
     /**
-     * Check if a quote is favorited by a user using cache
-     *
-     * @param User $user
-     * @return bool
-     */
-    public function isFavoritedBy(User $user): bool
-    {
-        return Cache::remember(
-            "quote_favorite_{$user->id}_{$this->id}",
-            300,
-            fn() => $this->favoritedBy()->where('users.id', $user->id)->exists()
-        );
-    }
-
-    /**
      * Toggle the favorite status of this quote for a user.
      *
      * @param User $user The user to toggle the favorite status for
-     * @return bool The new favorite status
+     * @return void
      */
-    public function toggleFavorite(User $user): bool
+    public function toggleFavorite(User $user): void
     {
-        $wasFavorited = $this->isFavoritedBy($user);
-        
-        if ($wasFavorited) {
-            $this->favoritedBy()->detach($user->id);
-        } else {
-            $this->favoritedBy()->attach($user->id);
-        }
-
-        // Clear relevant caches
-        Cache::forget("quote_favorite_{$user->id}_{$this->id}");
-        Cache::forget("user_favorites_{$user->id}");
-
-        return !$wasFavorited;
+        $this->favoritedBy()->toggle($user);
     }
 
     /**

@@ -13,10 +13,11 @@
                 </div>
             @endif
 
-            <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
-                <div class="p-6">
-                    <livewire:quote-grid mode="favorites" />
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                @livewire('show-favorite-quotes')
+            </div>
+            <div class="mt-6">
+                @livewire('show-favorite-quotes-pagination')
             </div>
         </div>
     </div>
